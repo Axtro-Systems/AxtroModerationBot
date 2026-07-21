@@ -38,15 +38,21 @@ export async function execute(interaction, client) {
       }
     } catch {}
 
-    // 2. Graceful database disconnect
+    // 2. Close HTTP Server to release port 3000
+    if (client.httpServer && typeof client.httpServer.close === 'function') {
+      await new Promise(r => client.httpServer.close(r)).catch(() => {});
+      logger.info('HTTP server closed for reboot');
+    }
+
+    // 3. Graceful database disconnect
     await mongoose.disconnect().catch(() => {});
     logger.info('Mongoose disconnected for reboot');
 
-    // 3. Destroy Discord connection
+    // 4. Destroy Discord connection
     client.destroy();
     logger.info('Discord client destroyed for reboot');
 
-    // 4. Spawn new detached child process of the bot and exit parent
+    // 5. Spawn new detached child process of the bot and exit parent
     const { spawn } = await import('child_process');
     logger.info('Spawning new bot process...');
     
