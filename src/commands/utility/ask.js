@@ -1,0 +1,124 @@
+import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { errorEmbed } from '../../utils/embed.js';
+import { isAdmin } from '../../utils/permissions.js';
+import { UserAskLimitModel } from '../../models/UserAskLimit.js';
+import { config } from '../../config.js';
+import { logger } from '../../utils/logger.js';
+
+export const defer = true;
+export const ephemeral = false;
+
+export const data = new SlashCommandBuilder()
+  .setName('ask')
+  .setDescription('Ask Questions To AI')
+  .addStringOption(option =>
+    option.setName('question')
+      .setDescription('The question you want to ask')
+      .setRequired(true)
+  );
+
+export async function execute(interaction, client) {
+  const question = interaction.options.getString('question', true);
+  const userId = interaction.user.id;
+
+  
+  const isUserAdmin = await isAdmin(interaction);
+
+  if (!isUserAdmin) {
+    
+    const now = new Date();
+    let limitRecord = await UserAskLimitModel.findOne({ userId });
+
+    if (!limitRecord) {
+      limitRecord = new UserAskLimitModel({
+        userId,
+        count: 1,
+        lastUsed: now,
+      });
+      await limitRecord.save();
+    } else {
+      const lastUsed = limitRecord.lastUsed;
+      const isSameDay = now.getUTCFullYear() === lastUsed.getUTCFullYear() &&
+                        now.getUTCMonth() === lastUsed.getUTCMonth() &&
+                        now.getUTCDate() === lastUsed.getUTCDate();
+
+      if (!isSameDay) {
+        limitRecord.count = 1;
+        limitRecord.lastUsed = now;
+      } else {
+        if (limitRecord.count >= 15) {
+          const limitEmbed = errorEmbed('You have reached your daily limit of 15 queries for `/ask`. Limits reset daily at 00:00 UTC. Admins and owners are exempt.');
+          return interaction.editReply({ embeds: [limitEmbed] });
+        }
+        limitRecord.count += 1;
+        limitRecord.lastUsed = now;
+      }
+      await limitRecord.save();
+    }
+  }
+
+  
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.groqApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful AI assistant. Answer the user\'s question clearly and concisely. Keep the response under 1800 characters so it fits within a single Discord message.'
+          },
+          {
+            role: 'user',
+            content: question
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1024
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      logger.error(`Groq API returned status ${response.status}: ${errText}`);
+      throw new Error(`Groq API Error (Status ${response.status})`);
+    }
+
+    const responseData = await response.json();
+    const answer = responseData.choices?.[0]?.message?.content;
+
+    if (!answer) {
+      throw new Error('No response returned from Groq API');
+    }
+
+    let responseText = answer;
+    if (responseText.length > 1024) {
+      // Split into multiple parts or truncate if it goes over Discord embeds limits
+      // Embedding value can contain up to 1024 characters per field, but description can contain up to 4096!
+      // To display it beautifully and avoid field value limit of 1024 characters,
+      // let's put it in the Description of the embed instead of a field, which has a 4096 limit.
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('Ask AI')
+      .addFields(
+        { name: 'Question', value: question.length > 256 ? question.slice(0, 253) + '...' : question }
+      )
+      .setDescription(responseText.length > 4000 ? responseText.slice(0, 3950) + '\n\n*(response truncated due to Discord limit)*' : responseText)
+      .setFooter({ text: `Asked by ${interaction.user.tag}` })
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+
+  } catch (err) {
+    logger.error(`Error executing /ask command: ${err.message}`, err);
+    await interaction.editReply({
+      embeds: [errorEmbed('An error occurred while getting response from the AI. Please try again later.')]
+    });
+  }
+}

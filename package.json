@@ -1,0 +1,19 @@
+{
+  "name": "axtro-moderation",
+  "version": "1.0.0",
+  "description": "Axtro Moderation - Discord moderation bot",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.2",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "mongoose": "^8.8.0",
+    "node-cron": "^3.0.3",
+    "winston": "^3.15.0"
+  }
+}
