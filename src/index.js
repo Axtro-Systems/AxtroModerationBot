@@ -385,7 +385,7 @@ async function start() {
     await loadCommands();
     await loadEvents();
 
-    client.once('clientReady', async () => {
+    client.once('ready', async () => {
       logger.info(`Logged in as ${client.user.tag}`);
 
       await commandHandler.deployCommands();
