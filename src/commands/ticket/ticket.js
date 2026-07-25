@@ -2,8 +2,9 @@ import { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuild
 import { checkPermissions, requiredPerms } from '../../utils/permissions.js';
 import { successEmbed, errorEmbed, simpleEmbed, getLogoUrl } from '../../utils/embed.js';
 import { TicketSettingsModel } from '../../models/TicketSettings.js';
+import { config } from '../../config.js';
 
-export const setupState = new Map();
+const setupState = new Map();
 
 export const data = new SlashCommandBuilder()
   .setName('ticket')
