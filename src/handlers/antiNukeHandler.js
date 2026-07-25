@@ -340,7 +340,7 @@ async function triggerNukeResponse(guild, userId, action, antiNukeConfig, trigge
       targetId: userId,
       targetTag: member?.user?.tag || userId,
       moderatorId: guild.client.user.id,
-      moderatorTag: guild.client.user.tag || 'AxtroMod System',
+      moderatorTag: guild.client.user.tag || `${appConfig.brandingName} System`,
       reason: `[AntiNuke] Triggered: ${triggeredReason}`,
     });
     caseNumberStr = `#${caseEntry.caseNumber}`;

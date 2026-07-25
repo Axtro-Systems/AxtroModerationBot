@@ -25,12 +25,19 @@ export const config = {
   welcomeTemplate: process.env.WELCOME_TEMPLATE || 'Welcome {user} to {server}!\nWe are honoured to have you in our community!\nMake sure to check out {rules}.\n~ Thank you ~',
   welcomeImageUrl: process.env.WELCOME_IMAGE_URL || null,
 
+  brandingName: process.env.BRANDING_NAME || 'Axtro Systems',
+  brandingFooter: process.env.BRANDING_FOOTER || 'Axtro Systems',
+  logoUrl: process.env.LOGO_URL || null,
+  appealChannelId: process.env.APPEAL_CHANNEL_ID || null,
+
   alertChannelId: process.env.ALERT_CHANNEL_ID || '1520686423093543002',
-  alertUserIds: [
-    '1515179179212280029',
-    '1515179316869071010',
-    '1515179408699428944',
-  ],
+  alertUserIds: process.env.ALERT_USER_IDS
+    ? process.env.ALERT_USER_IDS.split(',').map(id => id.trim()).filter(Boolean)
+    : [
+        '1515179179212280029',
+        '1515179316869071010',
+        '1515179408699428944',
+      ],
 
   colors: {
     warn: 0xFFD700,
