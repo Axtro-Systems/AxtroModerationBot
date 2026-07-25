@@ -102,7 +102,7 @@ async function panelCreate(interaction, client) {
 
   const panelId = `panel_${Date.now().toString(36).slice(-5)}`;
 
-  const embed = simpleEmbed({ color: 0x5865F2, title, description, footer: { text: 'Axtro Systems' } })
+  const embed = simpleEmbed({ color: 0x5865F2, title, description, footer: { text: config.brandingFooter } })
     .setThumbnail(getLogoUrl());
 
   const openButton = new ButtonBuilder()
@@ -158,7 +158,7 @@ async function panelEdit(interaction, client) {
       if (channel) {
         const msg = await channel.messages.fetch(panel.messageId).catch(() => null);
         if (msg) {
-          const embed = simpleEmbed({ color: 0x5865F2, title: panel.title, description: panel.description, footer: { text: 'Axtro Systems' } })
+          const embed = simpleEmbed({ color: 0x5865F2, title: panel.title, description: panel.description, footer: { text: config.brandingFooter } })
             .setThumbnail(getLogoUrl());
           await msg.edit({ embeds: [embed] });
         }
@@ -246,7 +246,7 @@ async function panelPost(interaction, client) {
     return interaction.editReply({ embeds: [errorEmbed('Invalid channel for panel.')] });
   }
 
-  const embed = simpleEmbed({ color: 0x5865F2, title: panel.title, description: panel.description, footer: { text: 'Axtro Systems' } })
+  const embed = simpleEmbed({ color: 0x5865F2, title: panel.title, description: panel.description, footer: { text: config.brandingFooter } })
     .setThumbnail(getLogoUrl());
 
   const openButton = new ButtonBuilder()

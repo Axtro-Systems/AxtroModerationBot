@@ -3,6 +3,7 @@ import { CaseModel } from '../../models/Case.js';
 import { AppealModel } from '../../models/Appeal.js';
 import { WarnModel } from '../../models/Warn.js';
 import { errorEmbed } from '../../utils/embed.js';
+import { config } from '../../config.js';
 
 export const data = new SlashCommandBuilder()
   .setName('appeal')
@@ -79,7 +80,7 @@ export async function execute(interaction, client) {
       { name: '📌 Original Reason', value: `>>> ${targetCase.reason || 'No reason specified'}`, inline: false },
       { name: '📅 Issued On', value: `<t:${caseTimeUnix}:f> (<t:${caseTimeUnix}:R>)`, inline: false }
     )
-    .setFooter({ text: 'Axtro Systems • Appeal Portal' })
+    .setFooter({ text: `${config.brandingFooter} • Appeal Portal` })
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(

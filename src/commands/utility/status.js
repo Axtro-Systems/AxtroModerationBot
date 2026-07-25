@@ -2,6 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, version as djsV
 import { checkPermissions, requiredPerms } from '../../utils/permissions.js';
 import { errorEmbed } from '../../utils/embed.js';
 import { GuildModel } from '../../models/Guild.js';
+import { config } from '../../config.js';
 import mongoose from 'mongoose';
 import os from 'os';
 
@@ -123,7 +124,7 @@ export async function execute(interaction, client) {
         inline: true
       }
     )
-    .setFooter({ text: 'Axtro Systems · Admin only access' })
+    .setFooter({ text: `${config.brandingFooter} · Admin only access` })
     .setTimestamp();
 
   return interaction.editReply({ embeds: [embed] });

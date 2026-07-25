@@ -8,6 +8,7 @@ export function setClient(client) {
 }
 
 export function getLogoUrl() {
+  if (config.logoUrl) return config.logoUrl;
   if (discordClient) {
     const emoji = discordClient.emojis.cache.find(e => e.name.toLowerCase() === 'axtropvp');
     if (emoji) return emoji.imageURL();
@@ -26,7 +27,7 @@ export function modLogEmbed(caseEntry) {
       { name: 'Moderator', value: `${caseEntry.moderatorTag} (${caseEntry.moderatorId})`, inline: false },
       { name: 'Reason', value: caseEntry.reason || 'No reason provided', inline: false },
     )
-    .setFooter({ text: 'AxtroPvP Moderation', iconURL: getLogoUrl() })
+    .setFooter({ text: `${config.brandingFooter || 'Axtro Systems'} Moderation`, iconURL: getLogoUrl() })
     .setTimestamp();
 
   if (caseEntry.duration) {
@@ -56,7 +57,7 @@ export function simpleEmbed({ color, title, description, fields, footer, timesta
       });
     }
   } else {
-    embed.setFooter({ text: 'Axtro Systems', iconURL: getLogoUrl() });
+    embed.setFooter({ text: config.brandingFooter || 'Axtro Systems', iconURL: getLogoUrl() });
   }
   
   if (timestamp) embed.setTimestamp(timestamp);
@@ -68,7 +69,7 @@ export function errorEmbed(message) {
     .setColor(0xFF0000)
     .setTitle('Error')
     .setDescription(message)
-    .setFooter({ text: 'Axtro Systems', iconURL: getLogoUrl() })
+    .setFooter({ text: config.brandingFooter || 'Axtro Systems', iconURL: getLogoUrl() })
     .setTimestamp();
 }
 
@@ -77,7 +78,7 @@ export function successEmbed(message) {
     .setColor(0x00FF7F)
     .setTitle('Success')
     .setDescription(message)
-    .setFooter({ text: 'Axtro Systems', iconURL: getLogoUrl() })
+    .setFooter({ text: config.brandingFooter || 'Axtro Systems', iconURL: getLogoUrl() })
     .setTimestamp();
 }
 
