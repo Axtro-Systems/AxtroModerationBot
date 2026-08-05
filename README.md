@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="src/AxtroLogo.png" alt="Axtro Systems" width="220">
+
 # AxtroModerationBot
 
 **A full-featured Discord moderation & utility bot**
