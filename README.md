@@ -2,9 +2,9 @@
 
 # AxtroModerationBot
 
-**A premium, enterprise-grade Discord moderation & utility bot**
+**A full-featured Discord moderation & utility bot**
 
-Built with **Discord.js v14** and **MongoDB** — persistent warning escalation, multi-layered sliding window anti-nuke protection, dynamic TTL AutoMod, full ticket lifecycle, and an interactive appeals system.
+Built with **Discord.js v14** and **MongoDB** — persistent warning escalation, layered anti-nuke protection, TTL-based AutoMod, a complete ticket system, and an interactive appeals flow.
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0.en.html)
 [![Discord.js](https://img.shields.io/badge/discord.js-v14-5865F2?logo=discord&logoColor=white)](https://discord.js.org)
@@ -14,47 +14,55 @@ Built with **Discord.js v14** and **MongoDB** — persistent warning escalation,
 
 ---
 
-## ⚡ Key Systems & Logics
+## Key Systems
 
-### 🛡️ Multi-Layered Anti-Nuke Engine (Sliding Windows)
-* **Layer 1 (Burst Fast Nuke)**:
-  * **Channel Deletions**: $\ge 3$ deletions in 10s $\rightarrow$ Instant Role Strip & Punishment.
-  * **Channel Creations**: $\ge 5$ creations in 10s $\rightarrow$ Instant Role Strip & Creation Cleanup.
-* **Layer 2 (Medium Pacing)**:
-  * **Channel Deletions**: $\ge 5$ deletions in 60s $\rightarrow$ Instant Trigger.
-  * **Channel Creations**: $\ge 8$ creations in 60s $\rightarrow$ Instant Trigger.
-* **Layer 3 (Sustained Slow Nuke Evasion Catch)**:
-  * **Channel Deletions**: $\ge 10$ deletions in 5m (300s) $\rightarrow$ Instant Trigger.
-  * **Channel Creations**: $\ge 15$ creations in 5m (300s) $\rightarrow$ Instant Trigger.
-* **Layer 4 (Combined Create + Delete Chaos)**:
-  * **Combined Actions**: $\ge 8$ total create/delete actions combined in 30s $\rightarrow$ Instant Trigger.
-* **Creation Flood Auto-Cleanup**: Automatically auto-deletes spam-created channels created by the offender in the last 5 minutes upon neutralization.
-* **Setup Mode (`/setup-mode`)**: Admins can toggle Setup Mode (e.g. `/setup-mode on duration:30m`) to raise Anti-Nuke threshold limits by **5x** during intentional server restructuring without false positives.
+### Anti-Nuke Protection (Layered Detection)
 
-### 🔨 Persistent Warning Escalation (MongoDB)
-* **Point Accumulation (1-5 Points)**: Warnings accumulate weighted points based on infraction severity (Minor = 1 pt, Severe = 2 pts).
-* **Automated Escalation Tiers**:
-  * **2 Points**: Automatic **1-Day Timeout**.
-  * **3 Points**: Automatic **6-Hour Timeout**.
-  * **4 Points**: Automatic **3-Day Timeout**.
-  * **5 Points**: Automatic **28-Day Timeout** + **1 Strike Flag** (warning counter resets to 0/5).
-* **Strike-to-Ban System**: Reaching 5 points a second time (**2 Strike Flags**) triggers an **Automatic Permanent Ban**.
-* **14-Day Warning Decay**: Active warnings automatically decay by -1 point after 14 days without new infractions via a daily cron schedule.
+Detection runs across multiple time windows so both fast attacks and slower, evasive ones get caught.
 
-### 📬 Interactive Appeals Portal (`/appeal`)
-* **DM & Guild Support**: Users can run `/appeal` in Direct Messages or in server channels.
-* **Interactive Request Embed**: Renders user punishment details, active warning points, case date, and original reason.
-* **Modal Explanation Form**: Users click **`[ 📝 Submit Explanation ]`** to type their appeal in a modal text box.
-* **Dedicated Staff Review Channel**: Appeals post directly to the designated staff appeals channel if configured.
-* **In-Place Embed Updates**: Staff click **`[ ✅ Approve Appeal ]`** or **`[ ❌ Reject Appeal ]`** to resolve the appeal in place.
-* **Multi-Model Cleanup**: Approving an appeal automatically lifts timeouts, deactivates active warnings, clears AutoMod trackers, and unbans users.
+| Layer | Trigger | Window |
+|---|---|---|
+| 1 — Burst | 3+ channel deletions | 10s |
+| 1 — Burst | 5+ channel creations | 10s |
+| 2 — Medium | 5+ channel deletions | 60s |
+| 2 — Medium | 8+ channel creations | 60s |
+| 3 — Sustained | 10+ channel deletions | 5 min |
+| 3 — Sustained | 15+ channel creations | 5 min |
+| 4 — Combined | 8+ create/delete actions total | 30s |
 
-### 🔍 Dynamic TTL AutoMod Engine
-* **Restart-Proof Tracking**: Uses MongoDB `{ expireAfterSeconds: 0 }` TTL indexes to persist spam and invite link rate-limit state across bot reboots.
+Any triggered layer strips the offending member's roles and applies the configured punishment. Layers 1 and 2 also clean up any channels the offender created during the flood.
+
+**Setup Mode** (`/setup-mode on duration:30m`) temporarily raises all thresholds by 5x, so staff can restructure a server without tripping false positives.
+
+### Warning Escalation (Persistent, MongoDB-backed)
+
+Warnings carry a point value based on severity (minor = 1 pt, severe = 2 pts) and accumulate per member. Escalation is automatic:
+
+| Points | Action |
+|---|---|
+| 2 | 1-day timeout |
+| 3 | 6-hour timeout |
+| 4 | 3-day timeout |
+| 5 | 28-day timeout + 1 strike, points reset to 0 |
+| 5 (again, 2nd strike) | Permanent ban |
+
+Warnings decay by -1 point after 14 days without a new infraction (checked daily).
+
+### Appeals (`/appeal`)
+
+- Works in both DMs and server channels.
+- Shows the member their punishment details, current points, case date, and reason.
+- Member submits an explanation via a modal form.
+- Staff review and resolve appeals directly from the embed (Approve / Reject buttons), posted to a dedicated staff channel if one is configured.
+- Approving an appeal automatically lifts the timeout, deactivates the related warning, clears AutoMod tracking, and unbans if applicable.
+
+### AutoMod
+
+Uses MongoDB TTL indexes (`expireAfterSeconds: 0`) to track spam and invite-link rate limits, so state survives bot restarts.
 
 ---
 
-## ⚙️ Commands
+## Commands
 
 <details>
 <summary><b>General & Appeals</b></summary>
@@ -62,8 +70,8 @@ Built with **Discord.js v14** and **MongoDB** — persistent warning escalation,
 | Command | Description |
 |---|---|
 | `/start` | Show basic bot information |
-| `/appeal` | Request an appeal for an active warning, timeout, or ban (Works in DM & Guilds) |
-| `/status` | Advanced system status: CPU load, RAM, Mongo state, config (Admin only) |
+| `/appeal` | Request an appeal for an active warning, timeout, or ban (DM or server) |
+| `/status` | System status: CPU, RAM, MongoDB connection, config (admin only) |
 | `/ask` | Query the AI chat integration |
 | `/avatar` | Fetch a user's avatar |
 | `/channelinfo` | Get details of a channel |
@@ -78,14 +86,14 @@ Built with **Discord.js v14** and **MongoDB** — persistent warning escalation,
 
 | Command | Description |
 |---|---|
-| `/setup-mode` | Toggle server Setup Mode (`on`, `off`, `status`) to raise thresholds by 5x during server building |
+| `/setup-mode` | Toggle Setup Mode (`on`, `off`, `status`) — raises thresholds by 5x while building |
 | `/automod` | Manage link, invite, caps, mention, and emoji filters |
-| `/profanity` | Upload, clear, list, or modify custom profanity lists |
+| `/profanity` | Upload, clear, list, or edit custom profanity lists |
 | `/antinuke-config` | Configure anti-nuke thresholds and actions |
 | `/antinuke-enable` | Enable anti-nuke protection |
 | `/antinuke-disable` | Disable anti-nuke protection |
 | `/antinuke-status` | Check current anti-nuke status and logs |
-| `/antinuke-whitelist` | Whitelist trusted members from anti-nuke actions |
+| `/antinuke-whitelist` | Exempt trusted members from anti-nuke actions |
 | `/raid` | Configure anti-raid controls |
 
 </details>
@@ -122,11 +130,11 @@ Built with **Discord.js v14** and **MongoDB** — persistent warning escalation,
 | Command | Description |
 |---|---|
 | `/ticket setup` | Walk through the ticket system setup wizard |
-| `/ticket panel` | Post, edit, list (with auto-pruning), or delete ticket panels |
+| `/ticket panel` | Post, edit, list (auto-pruning), or delete ticket panels |
 | `/welcome setup` | Configure the welcome channel and auto-roles |
-| `/welcome toggle` | Turn the welcome greeting system on or off |
-| `/welcome message` | Customize the welcome message template (supports `{user}`, `{username}`, `{server}`, `{membercount}`, `{rules}`) |
-| `/welcome image` | Upload an image attachment or set a custom welcome template image URL |
+| `/welcome toggle` | Turn the welcome greeting on or off |
+| `/welcome message` | Customize the welcome message (`{user}`, `{username}`, `{server}`, `{membercount}`, `{rules}`) |
+| `/welcome image` | Upload an attachment or set a welcome card image URL |
 | `/welcome preview` | Preview the current welcome card and embed |
 
 </details>
@@ -136,77 +144,80 @@ Built with **Discord.js v14** and **MongoDB** — persistent warning escalation,
 
 | Command | Description |
 |---|---|
-| `/giveaway setup` | Open the interactive modal to quickly create a giveaway |
+| `/giveaway setup` | Open a modal to quickly create a giveaway |
 | `/giveaway start` | Launch a giveaway with custom parameters (prize, duration, requirements) |
 | `/giveaway end` | Force-end a running giveaway early |
 | `/giveaway reroll` | Draw new winners for a completed giveaway |
 | `/giveaway edit` | Modify prize, winners, or duration of an active giveaway |
 | `/giveaway list` | Display active giveaways (auto-prunes deleted messages) |
-| `/giveaway delete` | Cancel a giveaway and delete its message immediately |
-| `/giveaway pause` / `/giveaway resume` | Pause or resume countdown schedules |
-| `/giveaway stats` | Show statistics of a giveaway or check user participation history |
-| `/giveaway template save` | Save entry requirements as a template preset |
-| `/giveaway template delete` | Remove a template preset |
+| `/giveaway delete` | Cancel a giveaway and delete its message |
+| `/giveaway pause` / `/giveaway resume` | Pause or resume a giveaway's countdown |
+| `/giveaway stats` | Show giveaway stats or a user's participation history |
+| `/giveaway template save` | Save entry requirements as a reusable template |
+| `/giveaway template delete` | Remove a saved template |
 | `/giveaway template list` | List all saved templates in the guild |
-| `/restart` | Reboot the bot and clear in-memory caches (Owner Only) |
+| `/restart` | Reboot the bot and clear in-memory caches (owner only) |
 
 </details>
 
 ---
 
-## 📁 Environment Variables
+## Environment Variables
 
-### Required Variables
+### Required
 
 | Variable | Description |
 |---|---|
-| `BOT_TOKEN` | Discord Bot Token from the Developer Portal |
-| `CLIENT_ID` | Application Client ID |
-| `GUILD_ID` | Main Discord Server ID (used for instant command registration) |
-| `MONGO_URI` | MongoDB connection string (stores logs, cases, warnings, and configs) |
-| `OWNER_ID` | Discord User ID of primary bot owner (bypasses bot permissions) |
+| `BOT_TOKEN` | Bot token from the Discord Developer Portal |
+| `CLIENT_ID` | Application client ID |
+| `GUILD_ID` | Main server ID — used to register slash commands instantly during development |
+| `MONGO_URI` | MongoDB connection string (stores logs, cases, warnings, config) |
+| `OWNER_ID` | Discord user ID of the primary bot owner — bypasses permission checks |
 
-### Optional Variables
+### Optional
 
 | Variable | Description | Default |
 |---|---|---|
-| `LOG_LEVEL` | Console log verbosity level (`info`, `debug`, `warn`) | `info` |
-| `ALERT_CHANNEL_ID` | Channel ID to receive security & Anti-Nuke alert embeds | — |
-| `ALERT_USER_IDS` | Comma-separated User IDs to ping on Anti-Nuke alerts | — |
-| `APPEAL_CHANNEL_ID` | Dedicated channel ID for staff to review user appeals | — |
-| `GROQ_API_KEY` | API Key required for `/ask` AI chatbot integration | — |
-| `BRANDING_NAME` | Custom bot title shown in embeds | `Axtro Systems` |
-| `BRANDING_FOOTER` | Custom embed footer text | `Axtro Systems` |
-| `LOGO_URL` | Direct HTTPS image link used as embed logo | — |
-| `WELCOME_TEMPLATE` | Default welcome message template (supports `{user}`, `{username}`, `{server}`, `{membercount}`, `{rules}`) | — |
-| `WELCOME_IMAGE_URL` | Default background image template URL for welcome card embeds | — |
+| `LOG_LEVEL` | Console log verbosity (`info`, `debug`, `warn`) | `info` |
+| `ALERT_CHANNEL_ID` | Channel for security & anti-nuke alerts | — |
+| `ALERT_USER_IDS` | Comma-separated user IDs to ping on anti-nuke alerts | — |
+| `APPEAL_CHANNEL_ID` | Channel where staff review appeals | — |
+| `GROQ_API_KEY` | API key for the `/ask` AI integration | — |
+| `BRANDING_NAME` | Bot name shown in embeds | `Axtro Systems` |
+| `BRANDING_FOOTER` | Embed footer text | `Axtro Systems` |
+| `LOGO_URL` | HTTPS image URL used as the embed logo | — |
+| `WELCOME_TEMPLATE` | Default welcome message (`{user}`, `{username}`, `{server}`, `{membercount}`, `{rules}`) | — |
+| `WELCOME_IMAGE_URL` | Default welcome card background image URL | — |
+
+> Note: `GROQ_API_KEY` is required for `/ask` to function — the command will error out without it. `ALERT_CHANNEL_ID` and `APPEAL_CHANNEL_ID` are optional but recommended, since anti-nuke alerts and appeals have nowhere to post without them.
 
 ---
 
-## 🚀 Deployment
+## Deployment
 
-### Render
-- **Build Command:** `npm install`
-- **Start Command:** `node src/index.js`
-
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/DevAstrro/DiscordModBot)
-
-### VPS / Self-Hosted
+### VPS / Self-Hosted (recommended)
 ```bash
 git clone https://github.com/Axtro-Systems/AxtroModerationBot.git
 cd AxtroModerationBot
 npm install
-cp .env.example .env   # populate environment variables
+cp .env.example .env   # fill in your environment variables
 npm start
 ```
+For production, run the bot under a process manager like `pm2` or a `systemd` service so it restarts automatically on crash or reboot.
+
+### Render
+- **Build command:** `npm install`
+- **Start command:** `node src/index.js`
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Axtro-Systems/AxtroModerationBot)
 
 ---
 
-## 👑 Credits
+## Credits
 
 - Built with [discord.js v14](https://github.com/discordjs/discord.js) and [Mongoose](https://mongoosejs.com)
 - Developed by **Axtro Systems**
 
-## 📄 License
+## License
 
-Licensed under the [GNU AGPL v3.0](https://github.com/DevAstrro/DiscordModBot/blob/main/LICENSE).
+Licensed under the [GNU AGPL v3.0](https://github.com/Axtro-Systems/AxtroModerationBot/blob/main/LICENSE).
