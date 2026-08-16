@@ -4,7 +4,6 @@ import { checkPermissions, requiredPerms } from '../../utils/permissions.js';
 import { GuildModel } from '../../models/Guild.js';
 import { logAudit } from '../../utils/caseUtils.js';
 
-// Must match MAX_WINDOW in tracker (5 min) — interval cannot exceed this
 const MAX_TRACKER_WINDOW = 300000;
 
 export const data = new SlashCommandBuilder()
@@ -21,13 +20,11 @@ export const data = new SlashCommandBuilder()
   .addIntegerOption(opt => opt.setName('max_emoji_creates').setDescription('Max emoji creates allowed in the interval').setMinValue(1).setMaxValue(50))
   .addIntegerOption(opt => opt.setName('max_sticker_creates').setDescription('Max sticker creates allowed in the interval').setMinValue(1).setMaxValue(50))
   .addIntegerOption(opt => opt.setName('interval').setDescription('Time window in ms (max 300000 / 5min)').setMinValue(5000).setMaxValue(MAX_TRACKER_WINDOW))
-  // --- Layered channel create/delete thresholds ---
   .addIntegerOption(opt => opt.setName('burst_channel_deletes').setDescription('Channel deletes in 10s to trigger burst detection').setMinValue(1).setMaxValue(20))
   .addIntegerOption(opt => opt.setName('burst_channel_creates').setDescription('Channel creates in 10s to trigger burst detection').setMinValue(1).setMaxValue(30))
   .addIntegerOption(opt => opt.setName('sustained_channel_deletes').setDescription('Channel deletes in 5min to trigger sustained detection').setMinValue(1).setMaxValue(50))
   .addIntegerOption(opt => opt.setName('sustained_channel_creates').setDescription('Channel creates in 5min to trigger sustained detection').setMinValue(1).setMaxValue(50))
   .addIntegerOption(opt => opt.setName('setup_mode_multiplier').setDescription('Multiplier applied to all thresholds while Setup Mode is active').setMinValue(1).setMaxValue(10))
-  // --- Punishment & AutoRestore ---
   .addStringOption(opt => opt.setName('action').setDescription('Action to take when threshold is exceeded').addChoices(
     { name: 'Ban', value: 'ban' },
     { name: 'Kick', value: 'kick' },
@@ -37,7 +34,6 @@ export const data = new SlashCommandBuilder()
 
 export const cooldown = 10000;
 
-// Maps option name -> [DB path, human label]
 const OPTION_MAP = {
   max_bans: ['antiNuke.maxBans', 'Max Bans'],
   max_kicks: ['antiNuke.maxKicks', 'Max Kicks'],
@@ -69,7 +65,6 @@ export async function execute(interaction, client) {
     return interaction.editReply({ embeds: [errorEmbed('Guild configuration not found.')] });
   }
 
-  // 1. Cross-Field Sanity Validation (Burst vs Sustained)
   const burstDel = interaction.options.getInteger('burst_channel_deletes');
   const sustainedDel = interaction.options.getInteger('sustained_channel_deletes');
   const currentBurstDel = guildConfig.antiNuke?.burstChannelDeletes ?? 3;
@@ -96,9 +91,8 @@ export async function execute(interaction, client) {
     });
   }
 
-  // 2. Extract options & filter no-ops
   const updates = {};
-  const changeLog = []; // [{ label, oldVal, newVal }]
+  const changeLog = [];
 
   const getExisting = (path) => path.split('.').reduce((obj, key) => obj?.[key], guildConfig);
 
@@ -115,7 +109,6 @@ export async function execute(interaction, client) {
     if (value === null || value === undefined) continue;
 
     const oldVal = getExisting(dbPath);
-    // Ignore no-op updates where new value matches existing value
     if (oldVal === value) continue;
 
     updates[dbPath] = value;
@@ -141,10 +134,8 @@ export async function execute(interaction, client) {
       details: `Updated: ${Object.keys(updates).join(', ')}`,
     });
   } catch (err) {
-    // Audit logging failure shouldn't block config update
   }
 
-  // 3. Build field-based diff confirmation embed (prevents 4096 char description overflow)
   const confirmEmbed = new EmbedBuilder()
     .setTitle('✅ Anti-Nuke Configuration Updated')
     .setColor(0x5865f2)
