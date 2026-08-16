@@ -9,7 +9,6 @@ export class CommandHandler {
     client.cooldowns = new Collection();
     this.globalRateLimit = new Map();
 
-    
     setInterval(() => {
       const now = Date.now();
       for (const [userId, hits] of this.globalRateLimit) {
@@ -31,7 +30,6 @@ export class CommandHandler {
     const allCommands = [...this.client.commands.values()].sort((a, b) => a.data.name.localeCompare(b.data.name));
     const commandsJson = allCommands.map(c => {
       const json = c.data.toJSON();
-      // Force default_member_permissions to null so Discord exposes slash commands to ALL members
       json.default_member_permissions = null;
       json.dm_permission = true;
       return json;
@@ -40,17 +38,14 @@ export class CommandHandler {
     const rest = new REST({ version: '10' }).setToken(config.token);
 
     try {
-      // 1. Wipe stale per-guild command permission locks stored on Discord servers
       if (config.guildId) {
         await rest.put(Routes.applicationGuildCommands(config.clientId, config.guildId), { body: [] });
         logger.info(`Cleared stale guild command permission locks for ${config.guildId}`);
       }
 
-      // 2. Deploy all commands globally for @everyone
       await rest.put(Routes.applicationCommands(config.clientId), { body: commandsJson });
       logger.info(`Successfully deployed ${commandsJson.length} global commands for @everyone`);
 
-      // 3. Re-deploy clean commands to primary guild for instant sync
       if (config.guildId) {
         await rest.put(Routes.applicationGuildCommands(config.clientId, config.guildId), { body: commandsJson });
         logger.info(`Successfully synchronized ${commandsJson.length} guild commands`);
