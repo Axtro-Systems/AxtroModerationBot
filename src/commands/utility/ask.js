@@ -21,11 +21,9 @@ export async function execute(interaction, client) {
   const question = interaction.options.getString('question', true);
   const userId = interaction.user.id;
 
-  
   const isUserAdmin = await isAdmin(interaction);
 
   if (!isUserAdmin) {
-    
     const now = new Date();
     let limitRecord = await UserAskLimitModel.findOne({ userId });
 
@@ -57,7 +55,6 @@ export async function execute(interaction, client) {
     }
   }
 
-  
   try {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -96,12 +93,6 @@ export async function execute(interaction, client) {
     }
 
     let responseText = answer;
-    if (responseText.length > 1024) {
-      // Split into multiple parts or truncate if it goes over Discord embeds limits
-      // Embedding value can contain up to 1024 characters per field, but description can contain up to 4096!
-      // To display it beautifully and avoid field value limit of 1024 characters,
-      // let's put it in the Description of the embed instead of a field, which has a 4096 limit.
-    }
 
     const embed = new EmbedBuilder()
       .setColor(0x5865F2)
