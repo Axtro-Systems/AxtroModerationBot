@@ -74,7 +74,6 @@ export async function execute(interaction, client) {
     details: `Silent: ${silent} | Severity: ${severity} | Points: ${points}`,
   });
 
-  // Handle immediate severe warning timeout (1 hour = 3600000 ms)
   if (severity === 'severe' && targetMember && targetMember.manageable) {
     const now = Date.now();
     const currentTimeoutEnd = targetMember.communicationDisabledUntilTimestamp || 0;
@@ -98,7 +97,6 @@ export async function execute(interaction, client) {
       }
       await targetMember.send(dmMsg);
     } catch {
-      // DM failed, continue
     }
   }
 
