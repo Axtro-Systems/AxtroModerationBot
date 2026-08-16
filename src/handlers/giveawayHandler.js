@@ -9,7 +9,6 @@ export async function handleGiveawayInteraction(interaction, client) {
 
   const customId = interaction.customId;
 
-  // Modal Setup Submission
   if (interaction.isModalSubmit() && customId === 'giveaway_setup_modal') {
     try {
       await interaction.deferReply({ ephemeral: true });
@@ -53,7 +52,6 @@ export async function handleGiveawayInteraction(interaction, client) {
     return;
   }
 
-  // 1. Giveaway Join/Leave Button
   if (customId.startsWith('giveaway_entry_')) {
     const giveawayId = customId.slice('giveaway_entry_'.length);
 
@@ -78,18 +76,15 @@ export async function handleGiveawayInteraction(interaction, client) {
       return interaction.editReply({ embeds: [errorEmbed('Failed to fetch your server profile. Please try again.')] });
     }
 
-    // Eligibility check
     const eligible = await giveawayManager.checkUserEligibility(member, giveaway);
     if (!eligible) {
       return interaction.editReply({ embeds: [errorEmbed('You do not meet the entry requirements for this giveaway.')] });
     }
 
-    // Concurrency safe entry/exit toggle
     const userId = member.id;
     const isEntered = giveaway.entries.some(e => e.userId === userId);
 
     if (!isEntered) {
-      // Enter user
       const weight = giveawayManager.calculateUserWeight(member, giveaway);
       
       const updated = await GiveawayModel.findOneAndUpdate(
@@ -108,7 +103,6 @@ export async function handleGiveawayInteraction(interaction, client) {
         embeds: [successEmbed(`🎉 **You have successfully joined the giveaway!**\nYour entry weight is **${weight}**.`)]
       });
     } else {
-      // Prompt confirmation to leave
       const confirmButton = new ButtonBuilder()
         .setCustomId(`giveaway_confirm_leave_${giveawayId}`)
         .setLabel('Confirm Leave')
@@ -131,7 +125,6 @@ export async function handleGiveawayInteraction(interaction, client) {
     }
   }
 
-  // 2. Claim Prize Button
   if (customId.startsWith('giveaway_claim_')) {
     const giveawayId = customId.slice('giveaway_claim_'.length);
 
@@ -154,7 +147,6 @@ export async function handleGiveawayInteraction(interaction, client) {
     }
   }
 
-  // 3. View Participants Button
   if (customId.startsWith('giveaway_list_users_')) {
     const giveawayId = customId.slice('giveaway_list_users_'.length);
 
@@ -183,7 +175,6 @@ export async function handleGiveawayInteraction(interaction, client) {
     });
   }
 
-  // 4. Confirm Leave Button
   if (customId.startsWith('giveaway_confirm_leave_')) {
     const giveawayId = customId.slice('giveaway_confirm_leave_'.length);
 
@@ -213,7 +204,6 @@ export async function handleGiveawayInteraction(interaction, client) {
     });
   }
 
-  // 5. Cancel Leave Button
   if (customId.startsWith('giveaway_cancel_leave_')) {
     try {
       await interaction.deferUpdate();
