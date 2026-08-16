@@ -8,31 +8,21 @@ import { logger } from '../utils/logger.js';
 import { getGuildQueue } from '../utils/rateLimitQueue.js';
 import { createUnifiedModEmbed } from '../utils/modLogEmbed.js';
 
-// -------------------------------------------------------------
-// In-Memory Fast Caches (Zero Database Latency during Nuke Bursts)
-// -------------------------------------------------------------
-const recentlyPunishedCache = new Map(); // key -> timestamp
-const setupModeCache = new Map(); // guildId -> { enabled: boolean, expiresAt: number }
-const ownerDmCooldownMap = new Map(); // guildId -> timestamp
+const recentlyPunishedCache = new Map();
+const setupModeCache = new Map();
+const ownerDmCooldownMap = new Map();
 
-const RECENT_PUNISHMENT_WINDOW = 300000; // 5 minutes
+const RECENT_PUNISHMENT_WINDOW = 300000;
 
-// Audit Log Event Debouncer (caches recent entry IDs to avoid duplicate processing)
-const debouncedAuditEvents = new Map(); // `${guildId}:${eventId}` -> timestamp
-const DEBOUNCE_TTL = 10000; // 10 seconds
+const debouncedAuditEvents = new Map();
+const DEBOUNCE_TTL = 10000;
 
-// -------------------------------------------------------------
-// Multi-Layered Sliding Window Detection Engine (Rolling Queues)
-// -------------------------------------------------------------
-// Map<key, { creates: number[], deletes: number[], general: Map<action, number[]> }>
 const slidingTracker = new Map();
-const MAX_WINDOW = 300000; // 5 minutes sliding window
+const MAX_WINDOW = 300000;
 
-// Periodic cleanup of expired in-memory queue entries
 setInterval(() => {
   const now = Date.now();
 
-  // 1. Clean sliding action queues
   for (const [key, entry] of slidingTracker) {
     entry.creates = entry.creates.filter(t => now - t <= MAX_WINDOW);
     entry.deletes = entry.deletes.filter(t => now - t <= MAX_WINDOW);
@@ -51,12 +41,10 @@ setInterval(() => {
     }
   }
 
-  // 2. Clean recently punished cache
   for (const [key, ts] of recentlyPunishedCache) {
     if (now - ts > RECENT_PUNISHMENT_WINDOW) recentlyPunishedCache.delete(key);
   }
 
-  // 3. Clean audit log debounce entries
   for (const [key, ts] of debouncedAuditEvents) {
     if (now - ts > DEBOUNCE_TTL) debouncedAuditEvents.delete(key);
   }
@@ -66,9 +54,6 @@ export function setSetupModeCache(guildId, enabled, expiresAtMs) {
   setupModeCache.set(guildId, { enabled, expiresAt: expiresAtMs });
 }
 
-/**
- * Main Anti-Nuke Action Tracker (Supports Layered Sliding Windows across ALL actions)
- */
 export async function trackAction(guild, userId, action, fromDirectEvent = false) {
   const cached = guild.client?.guildConfigs?.get(guild.id);
   const antiNukeConfig = cached?.antiNuke ?? await getAntiNukeConfig(guild.id);
@@ -81,12 +66,10 @@ export async function trackAction(guild, userId, action, fromDirectEvent = false
 
   const now = Date.now();
 
-  // Zero DB Hit Check 1: In-memory recently punished cache
   const punishedKey = `${guild.id}:${userId}`;
   const lastPunishedTs = recentlyPunishedCache.get(punishedKey);
   if (lastPunishedTs && now - lastPunishedTs < RECENT_PUNISHMENT_WINDOW) return;
 
-  // Zero DB Hit Check 2: Setup Mode Cache (Fallback to short-cached DB lookup)
   let isSetupMode = false;
   const setupCached = setupModeCache.get(guild.id);
   if (setupCached) {
@@ -112,15 +95,11 @@ export async function trackAction(guild, userId, action, fromDirectEvent = false
   const setupMult = antiNukeConfig.setupModeMultiplier ?? 5;
   const mult = isSetupMode ? setupMult : 1;
 
-  // Dynamic Threshold Limits from DB / Config Cache (with fallback defaults)
   const burstDelLimit = Math.ceil((antiNukeConfig.burstChannelDeletes ?? 3) * mult);
   const burstCreateLimit = Math.ceil((antiNukeConfig.burstChannelCreates ?? 5) * mult);
   const sustainedDelLimit = Math.ceil((antiNukeConfig.sustainedChannelDeletes ?? 10) * mult);
   const sustainedCreateLimit = Math.ceil((antiNukeConfig.sustainedChannelCreates ?? 15) * mult);
 
-  // -------------------------------------------------------------
-  // Layered Sliding Window Engine (Evaluates ALL Action Types)
-  // -------------------------------------------------------------
   if (action === 'channelCreate' || action === 'channelDelete') {
     if (action === 'channelCreate') userQueue.creates.push(now);
     if (action === 'channelDelete') userQueue.deletes.push(now);
@@ -139,32 +118,25 @@ export async function trackAction(guild, userId, action, fromDirectEvent = false
     const combined30s = userQueue.creates.filter(t => now - t <= 30000).length + userQueue.deletes.filter(t => now - t <= 30000).length;
     const combinedLimit = Math.ceil(Math.max(burstDelLimit, burstCreateLimit) * 1.6);
 
-    // Layer 1: Burst Detection
     if (deletes10s >= burstDelLimit) {
       triggeredReason = `Layer 1: Burst Channel Deletion (${deletes10s} deletions in 10s | Limit: ${burstDelLimit})`;
     } else if (creates10s >= burstCreateLimit) {
       triggeredReason = `Layer 1: Burst Channel Creation Flood (${creates10s} creations in 10s | Limit: ${burstCreateLimit})`;
     }
-    // Layer 2: Medium Pacing Detection
     else if (deletes60s >= Math.max(burstDelLimit + 1, Math.ceil(sustainedDelLimit * 0.6))) {
       triggeredReason = `Layer 2: Medium-Speed Channel Deletion (${deletes60s} deletions in 60s)`;
     } else if (creates60s >= Math.max(burstCreateLimit + 1, Math.ceil(sustainedCreateLimit * 0.6))) {
       triggeredReason = `Layer 2: Medium-Speed Channel Creation (${creates60s} creations in 60s)`;
     }
-    // Layer 3: Sustained Evasion Catch
     else if (deletes300s >= sustainedDelLimit) {
       triggeredReason = `Layer 3: Sustained Channel Deletion (${deletes300s} deletions in 5m | Limit: ${sustainedDelLimit})`;
     } else if (creates300s >= sustainedCreateLimit) {
       triggeredReason = `Layer 3: Sustained Channel Creation Flood (${creates300s} creations in 5m | Limit: ${sustainedCreateLimit})`;
     }
-    // Layer 4: Combined Create + Delete Chaos
     else if (combined30s >= combinedLimit) {
       triggeredReason = `Layer 4: Combined Channel Create/Delete Chaos (${combined30s} total actions in 30s | Limit: ${combinedLimit})`;
     }
   } else {
-    // -------------------------------------------------------------
-    // Multi-Layered Tracking for Bans, Kicks, Roles, Webhooks, Bots
-    // -------------------------------------------------------------
     if (!userQueue.general.has(action)) {
       userQueue.general.set(action, []);
     }
@@ -200,7 +172,6 @@ export async function trackAction(guild, userId, action, fromDirectEvent = false
     }
   }
 
-  // Trigger Anti-Nuke Response if any layer was tripped
   if (triggeredReason) {
     slidingTracker.delete(key);
     recentlyPunishedCache.set(punishedKey, now);
@@ -212,9 +183,6 @@ export async function trackActionFromEvent(guild, userId, action) {
   await trackAction(guild, userId, action, true);
 }
 
-/**
- * Handles incoming audit log events with debouncing
- */
 export async function handleAuditLogEvent(guild, auditAction, executorId, eventId) {
   if (eventId) {
     const debounceKey = `${guild.id}:${eventId}`;
@@ -245,13 +213,9 @@ export async function handleAuditLogEvent(guild, auditAction, executorId, eventI
   await trackAction(guild, executorId, action, true);
 }
 
-/**
- * Executes Anti-Nuke Safeguards (Decoupled Ban + Accurate Punishment Tracking + Creation Cleanup)
- */
 async function triggerNukeResponse(guild, userId, action, antiNukeConfig, triggeredReason = 'Anti-Nuke Threshold Exceeded') {
   logger.warn(`AntiNuke triggered: ${action} by ${userId} in ${guild.id} [${triggeredReason}]`);
 
-  // Update DB async to log punishment
   AntiNukeModel.findOneAndUpdate(
     { guildId: guild.id, userId },
     {
@@ -271,7 +235,6 @@ async function triggerNukeResponse(guild, userId, action, antiNukeConfig, trigge
 
   let punishmentApplied = 'None (manual review required)';
 
-  // 1. STEP 1: IMMEDIATELY STRIP DANGEROUS PERMISSIONS (If member is present in guild)
   if (member && member.manageable) {
     await queue.add(async () => {
       const dangerousRoles = member.roles.cache.filter(role =>
@@ -294,7 +257,6 @@ async function triggerNukeResponse(guild, userId, action, antiNukeConfig, trigge
     });
   }
 
-  // 2. STEP 2: CREATION FLOOD AUTO-CLEANUP (Delete spam-created channels by offender)
   if (action === 'channelCreate' || triggeredReason.includes('Creation Flood') || triggeredReason.includes('Combined')) {
     try {
       const auditLogs = await guild.fetchAuditLogs({ type: AuditLogEvent.ChannelCreate, limit: 25 }).catch(() => null);
@@ -312,7 +274,6 @@ async function triggerNukeResponse(guild, userId, action, antiNukeConfig, trigge
     }
   }
 
-  // 3. STEP 3: APPLY CONFIGURED PUNISHMENT (Decoupled Ban — Works even if offender left the guild!)
   const punishmentAction = antiNukeConfig.action || 'ban';
 
   if (punishmentAction === 'ban') {
@@ -331,7 +292,6 @@ async function triggerNukeResponse(guild, userId, action, antiNukeConfig, trigge
     punishmentApplied = 'Kicked';
   }
 
-  // 4. STEP 4: LOG INCIDENT TO AUDIT TRAIL & ALERT CHANNELS (Safely wrapped)
   let caseNumberStr = 'N/A';
   try {
     const caseEntry = await createCase({
@@ -377,7 +337,6 @@ async function triggerNukeResponse(guild, userId, action, antiNukeConfig, trigge
     }
   }
 
-  // Cooldown Owner DM notifications (max 1 DM per 60 seconds per guild)
   const lastDmTs = ownerDmCooldownMap.get(guild.id) || 0;
   if (Date.now() - lastDmTs > 60000) {
     ownerDmCooldownMap.set(guild.id, Date.now());
@@ -418,7 +377,6 @@ export async function runStartupHealthCheck(client) {
     for (const guild of client.guilds.cache.values()) {
       const config = client.guildConfigs?.get(guild.id) || await getAntiNukeConfig(guild.id);
       if (config && config.enabled) {
-        // Health check complete
       }
     }
   } catch (err) {
