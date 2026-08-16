@@ -19,9 +19,7 @@ try {
     .split(/[\r\n]+/)
     .map(w => w.trim().toLowerCase())
     .filter(w => w.length > 0);
-} catch {
-  // Fallback
-}
+} catch {}
 
 const SEVERE_PROFANITIES = ['nigger', 'faggot', 'retard', 'kike', 'cunt', 'chink', 'dyke'];
 const profanityRegexCache = new Map();
@@ -91,12 +89,10 @@ export async function execute(message, client) {
   let warnPoints = 1;
   let isSevereProfanity = false;
 
-  // 1. Spam scan
   if (shouldScanAll && automod.spamThreshold && automod.spamInterval) {
     const key = `${message.guild.id}:${message.author.id}`;
     const now = Date.now();
     
-    // We log message timestamps dynamically in AutoModTrackerModel
     const newSpamTracker = new AutoModTrackerModel({
       guildId: message.guild.id,
       userId: message.author.id,
@@ -115,35 +111,32 @@ export async function execute(message, client) {
       violations.push('spam');
       
       if (!dryRun) {
-        // Query the number of spam violations in the last 10 minutes to choose escalating timeout ladder
         const priorSpamViolations = await AutoModTrackerModel.countDocuments({
           guildId: message.guild.id,
           userId: message.author.id,
           type: 'spam_violation'
         });
 
-        let spamTimeout = 300000; // 1st: 5 min
+        let spamTimeout = 300000;
         if (priorSpamViolations === 1) {
-          spamTimeout = 900000; // 2nd: 15 min
+          spamTimeout = 900000;
         } else if (priorSpamViolations >= 2) {
-          spamTimeout = 3600000; // 3rd: 1 hour
+          spamTimeout = 3600000;
         }
 
         timeoutDuration = Math.max(timeoutDuration, spamTimeout);
 
-        // Record this spam violation
         const newSpamViolation = new AutoModTrackerModel({
           guildId: message.guild.id,
           userId: message.author.id,
           type: 'spam_violation',
-          expiresAt: new Date(now + 600000) // 10-minute window
+          expiresAt: new Date(now + 600000)
         });
         await newSpamViolation.save();
       }
     }
   }
 
-  // 2. Mass Mentions scan
   if (shouldScanAll && automod.maxMentions) {
     const userMentions = (message.content.match(/<@!?\d+>/g) || []).length;
     const roleMentions = (message.content.match(/<@&\d+>/g) || []).length;
@@ -153,12 +146,11 @@ export async function execute(message, client) {
     if (mentionCount > automod.maxMentions) {
       violations.push('mass mention');
       if (!dryRun && mentionCount > 10) {
-        timeoutDuration = Math.max(timeoutDuration, 600000); // 10-minute timeout for >10 mentions
+        timeoutDuration = Math.max(timeoutDuration, 600000);
       }
     }
   }
 
-  // 3. Invite Links scan
   if (shouldScanAll && automod.filterInvites) {
     const invitePattern = /discord(?:app)?\.(?:gg|io|me|li|com\/invite)\/[a-zA-Z0-9_-]+(?:\?[^\s]*)?|discord\.com\/invite\/[a-zA-Z0-9_-]+(?:\?[^\s]*)?/i;
     const hasInvite = invitePattern.test(message.content);
@@ -173,21 +165,20 @@ export async function execute(message, client) {
         });
 
         if (priorInvites >= 1) {
-          timeoutDuration = Math.max(timeoutDuration, 600000); // 10-minute timeout on 2nd offence in 24 hours
+          timeoutDuration = Math.max(timeoutDuration, 600000);
         }
 
         const newInviteViolation = new AutoModTrackerModel({
           guildId: message.guild.id,
           userId: message.author.id,
           type: 'invite_violation',
-          expiresAt: new Date(Date.now() + 86400000) // 24-hour tracking
+          expiresAt: new Date(Date.now() + 86400000)
         });
         await newInviteViolation.save();
       }
     }
   }
 
-  // 4. External Links scan
   if (shouldScanAll && automod.filterLinks && !violations.includes('invite link')) {
     const allowlist = automod.linkAllowlist || [];
     const linkMatches = message.content.match(/https?:\/\/[^\s]+/gi) || [];
@@ -205,7 +196,6 @@ export async function execute(message, client) {
     }
   }
 
-  // 5. Caps Lock scan
   if (shouldScanAll && automod.capsPercent) {
     const letters = message.content.replace(/[^a-zA-Z]/g, '');
     if (letters.length > 5) {
@@ -216,7 +206,6 @@ export async function execute(message, client) {
     }
   }
 
-  // 6. Emoji Spam scan
   if (shouldScanAll && automod.maxEmojis) {
     const emojiRegex = /<a?:\w+:\d+>|\p{Extended_Pictographic}/gu;
     const emojiCount = (message.content.match(emojiRegex) || []).length;
@@ -225,7 +214,6 @@ export async function execute(message, client) {
     }
   }
 
-  // 7. Profanity scan
   if (shouldScanProfanity && automod.filterProfanity) {
     const profanityRegex = getProfanityRegex(message.guild.id, automod.profanityList);
     const match = message.content.match(profanityRegex);
@@ -236,10 +224,10 @@ export async function execute(message, client) {
 
       if (!dryRun) {
         if (isSevereProfanity) {
-          timeoutDuration = Math.max(timeoutDuration, 3600000); // 1-hour timeout
-          warnPoints = 2; // 2 warning points
+          timeoutDuration = Math.max(timeoutDuration, 3600000);
+          warnPoints = 2;
         } else {
-          timeoutDuration = Math.max(timeoutDuration, 300000); // 5-minute timeout
+          timeoutDuration = Math.max(timeoutDuration, 300000);
           warnPoints = 1;
         }
       }
@@ -247,7 +235,6 @@ export async function execute(message, client) {
   }
 
   if (violations.length > 0) {
-    // Delete message unless in dry-run mode
     if (!dryRun) {
       try {
         await message.delete();
@@ -258,7 +245,6 @@ export async function execute(message, client) {
 
     const cooldownKey = `${message.guild.id}:${message.author.id}`;
     
-    // Check rolling counter loophole protection: 5+ triggers in 10 minutes triggers 1 formal warning
     const now = Date.now();
     const newTriggerLog = new AutoModTrackerModel({
       guildId: message.guild.id,
@@ -277,7 +263,6 @@ export async function execute(message, client) {
     let autoEscalated = false;
     if (triggerCount >= 5) {
       autoEscalated = true;
-      // Reset the counter
       await AutoModTrackerModel.deleteMany({
         guildId: message.guild.id,
         userId: message.author.id,
@@ -285,12 +270,12 @@ export async function execute(message, client) {
       });
     }
 
-    // Apply punishment cooldown to prevent double-warning on simultaneous messages
     const lastPunish = client.cooldowns.get(`punish-${cooldownKey}`);
     const cooldownMs = automod.punishmentCooldown || 30000;
     
     if (!autoEscalated && lastPunish && now - lastPunish < cooldownMs) return;
     client.cooldowns.set(`punish-${cooldownKey}`, now);
+    setTimeout(() => client.cooldowns.delete(`punish-${cooldownKey}`), cooldownMs);
 
     const violationReason = `AutoMod: ${violations.join(', ')}${autoEscalated ? ' (Escalated: 5+ trigger triggers)' : ''}`;
 
@@ -299,7 +284,6 @@ export async function execute(message, client) {
       return;
     }
 
-    // Determine warning points to add
     const finalPoints = autoEscalated ? 1 : warnPoints;
 
     const warn = new WarnModel({
@@ -313,7 +297,6 @@ export async function execute(message, client) {
     });
     await warn.save();
 
-    // Check active timeout comparison: proposed timeout duration should only apply if it is longer than existing
     if (timeoutDuration > 0 && member.manageable) {
       const currentTimeoutEnd = member.communicationDisabledUntilTimestamp || 0;
       const proposedTimeoutEnd = now + timeoutDuration;
@@ -323,7 +306,6 @@ export async function execute(message, client) {
       }
     }
 
-    // Run Warning Escalations (will handle Tier durations)
     await checkWarningEscalation(message.guild, message.member, client.user, message.channel);
     await checkSecurityViolations(message.guild, message.author.id);
 
@@ -337,7 +319,6 @@ export async function execute(message, client) {
       reason: violationReason,
     });
 
-    // Log to audit trail so automod actions appear alongside manual moderator actions
     await logAudit({
       guildId: message.guild.id,
       action: 'automod_violation',
@@ -358,6 +339,6 @@ export async function execute(message, client) {
         dmMsg += `\n*Note: Your next warning will result in an automatic 30-day mute!*`;
       }
       await message.author.send(dmMsg).catch(() => {});
-    } catch { }
+    } catch {}
   }
 }
