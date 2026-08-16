@@ -13,7 +13,6 @@ import { errorEmbed, successEmbed } from '../utils/embed.js';
 export async function handleAppealInteraction(interaction, client) {
   const customId = interaction.customId;
 
-  // 1. User clicks "📝 Submit Explanation" button -> Show Modal Form
   if (interaction.isButton() && customId.startsWith('appeal_open_modal_')) {
     const parts = customId.replace('appeal_open_modal_', '').split('_');
     const guildId = parts[0];
@@ -37,7 +36,6 @@ export async function handleAppealInteraction(interaction, client) {
     return interaction.showModal(modal);
   }
 
-  // 2. User submits Modal -> Save & Post to Appeals Channel
   if (interaction.isModalSubmit() && customId.startsWith('appeal_modal_submit_')) {
     await interaction.deferReply({ ephemeral: true });
 
@@ -52,16 +50,19 @@ export async function handleAppealInteraction(interaction, client) {
       return interaction.editReply({ embeds: [errorEmbed(`Case #${caseNumber} not found.`)] });
     }
 
+    let appealType = 'warn';
+    if (caseLog.type === 'ban' || caseLog.type === 'tempban') appealType = 'ban';
+    else if (caseLog.type === 'mute' || caseLog.type === 'tempmute') appealType = 'mute';
+
     const appeal = new AppealModel({
       guildId,
       userId: interaction.user.id,
       caseId: String(caseNumber),
-      type: caseLog.type === 'ban' || caseLog.type === 'tempban' ? 'ban' : 'warn',
+      type: appealType,
       reason: explanation
     });
     await appeal.save();
 
-    // Fetch Guild & Appeals Channel
     const guild = client.guilds.cache.get(guildId);
     const guildConfig = await GuildModel.findOne({ guildId });
     const targetChannelId = guildConfig?.appealChannel;
@@ -98,12 +99,11 @@ export async function handleAppealInteraction(interaction, client) {
     });
   }
 
-  // 3. Staff Approve / Reject Buttons (Updates embed in place)
   if (interaction.isButton() && (customId.startsWith('appeal_approve_') || customId.startsWith('appeal_reject_'))) {
     await interaction.deferReply({ ephemeral: true });
 
     const parts = customId.split('_');
-    const action = parts[1]; // 'approve' or 'reject'
+    const action = parts[1];
     const appealId = parts[2];
 
     const appeal = await AppealModel.findById(appealId);
@@ -164,7 +164,6 @@ export async function handleAppealInteraction(interaction, client) {
 
         await logResolution(guild, resolutionCase, 'unmute');
 
-        // Update the embed message in place to show Approved
         if (interaction.message) {
           const updatedEmbed = createUnifiedModEmbed({
             title: `📁 Appeal Request: Case #${appeal.caseId} [APPROVED]`,
@@ -204,7 +203,6 @@ export async function handleAppealInteraction(interaction, client) {
       appeal.resolvedAt = new Date();
       await appeal.save();
 
-      // Update embed message in place to show Rejected
       if (interaction.message) {
         const updatedEmbed = createUnifiedModEmbed({
           title: `📁 Appeal Request: Case #${appeal.caseId} [REJECTED]`,
